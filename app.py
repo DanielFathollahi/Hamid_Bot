@@ -2,13 +2,16 @@ import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
+# توکن ربات از متغیر محیطی
 TOKEN = os.environ.get('BOT_TOKEN')
+# آی‌دی گروه
 GROUP_ID = -1002542201765
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
 
+    # پیام خوش‌آمد به کاربر
     await context.bot.send_message(
         chat_id=chat_id,
         text=(
@@ -19,6 +22,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     )
 
+    # اطلاعات کاربر برای گروه
     user_info = (
         f"📥 کاربر جدید ربات را استارت کرد:\n"
         f"👤 نام: {user.full_name}\n"
@@ -27,6 +31,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💬 چت آی‌دی: {chat_id}"
     )
 
+    # ارسال اطلاعات به گروه
     await context.bot.send_message(chat_id=GROUP_ID, text=user_info)
 
 async def main():
