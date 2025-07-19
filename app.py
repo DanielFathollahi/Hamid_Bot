@@ -2,7 +2,7 @@ import os
 from telegram import Update, Bot
 from telegram.ext import Updater, CommandHandler, CallbackContext
 
-TOKEN = os.environ.get('BOT_TOKEN')  # میاد توکن رو از متغیر محیطی می‌خونه
+TOKEN = os.environ.get('BOT_TOKEN')  # توکن از متغیر محیطی میاد
 
 GROUP_ID = -1002542201765
 
