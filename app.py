@@ -1,12 +1,11 @@
 import os
-from telegram import Update, Bot
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-TOKEN = os.environ.get('BOT_TOKEN')  # توکن از متغیر محیطی میاد
-
+TOKEN = os.environ.get('BOT_TOKEN')
 GROUP_ID = -1002542201765
 
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
 
@@ -16,7 +15,7 @@ def start(update: Update, context: CallbackContext):
         "شماره تماس: 09125021908\n"
         "وبسایت: https://alvankani.com/"
     )
-    context.bot.send_message(chat_id=chat_id, text=welcome_text)
+    await context.bot.send_message(chat_id=chat_id, text=welcome_text)
 
     user_info = (
         f"کاربر ربات را استارت کرد:\n"
@@ -25,16 +24,13 @@ def start(update: Update, context: CallbackContext):
         f"آیدی: {user.id}\n"
         f"چت آی‌دی: {chat_id}"
     )
-    context.bot.send_message(chat_id=GROUP_ID, text=user_info)
+    await context.bot.send_message(chat_id=GROUP_ID, text=user_info)
 
-def main():
-    updater = Updater(token=TOKEN, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("start", start))
-
-    updater.start_polling()
-    updater.idle()
+async def main():
+    app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    await app.run_polling()
 
 if __name__ == '__main__':
-    main()
+    import asyncio
+    asyncio.run(main())
