@@ -1,19 +1,16 @@
 import os
 import logging
-from dotenv import load_dotenv
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, Contact
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     ContextTypes, filters
 )
 
-load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
-GROUP_ID = -1002542201765
+GROUP_ID = -1002542201765  # آیدی گروه شما
 
 logging.basicConfig(level=logging.INFO)
 
-# استارت: ارسال پیام معرفی + درخواست شماره
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     intro_text = (
         "📣 این اطلاعاتو بده:\n\n"
@@ -25,12 +22,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(intro_text)
 
-    # دکمه ارسال شماره
     contact_button = KeyboardButton(text="📱 ارسال شماره من", request_contact=True)
     reply_markup = ReplyKeyboardMarkup([[contact_button]], resize_keyboard=True, one_time_keyboard=True)
     await update.message.reply_text("برای ادامه لطفاً شماره تلفن خود را ارسال کنید:", reply_markup=reply_markup)
 
-# دریافت شماره و ارسال به گروه
 async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     contact: Contact = update.message.contact
     user = update.message.from_user
@@ -52,7 +47,6 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=GROUP_ID, text=msg)
     await update.message.reply_text("✅ شماره شما ثبت شد. با تشکر 🙏")
 
-# اجرای ربات
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
