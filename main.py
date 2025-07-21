@@ -1,28 +1,25 @@
 import os
 import threading
-import asyncio
-import re
 from flask import Flask
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler,
-    ContextTypes, filters, ConversationHandler
+    Application, CommandHandler, MessageHandler,
+    ConversationHandler, ContextTypes, filters
 )
 
-TOKEN = os.environ["TOKEN"]
+TOKEN = os.getenv("TOKEN")
 GROUP_CHAT_ID = -1002542201765
 
 app = Flask(__name__)
 
-ASK_DESCRIPTION, ASK_PHONE = range(2)
-
-@app.route('/ping')
+@app.route('/')
 def ping():
     return 'pong'
 
+ASK_DESCRIPTION, ASK_PHONE = range(2)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    intro = """
+    intro_text = """
 📌 معرفی: حمید فتح‌اللهی
 
 سلام و خوش‌آمدید 🌟
@@ -39,10 +36,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🌱 محصولات کشاورزی
 💎 و مواد اولیه صنعت طلا
 """
-    await update.message.reply_text(intro)
+    await update.message.reply_text(intro_text)
     await update.message.reply_text("لطفاً درباره کار خود و خودتان توضیح دهید ✍️")
     return ASK_DESCRIPTION
-
 
 async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["description"] = update.message.text
@@ -51,41 +47,30 @@ async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("لطفاً شماره تلفن خود را ارسال کنید 📱", reply_markup=markup)
     return ASK_PHONE
 
-
 async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     contact = update.message.contact
     phone = contact.phone_number if contact else update.message.text
     description = context.user_data.get("description", "")
 
-    if not re.match(r"^\+?\d{10,15}$", phone):
-        await update.message.reply_text("شماره تلفن وارد شده معتبر نیست، لطفاً دوباره تلاش کنید.")
-        return ASK_PHONE
-
     msg = (
-        f"👤 نام: {user.first_name} {user.last_name or ''}\n"
-        f"🆔 آیدی عددی: {user.id}\n"
-        f"🔗 یوزرنیم: @{user.username or 'ندارد'}\n"
-        f"📝 توضیحات: {description}\n"
-        f"📞 شماره: {phone}"
+        f"👤 {user.first_name} {user.last_name or ''}\n"
+        f"🆔 {user.id}\n"
+        f"🔗 @{user.username or 'ندارد'}\n"
+        f"📝 {description}\n"
+        f"📞 {phone}"
     )
 
-    await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=msg)
-    await update.message.reply_text("✅ اطلاعات شما ثبت شد. ممنون 🙏", reply_markup=ReplyKeyboardMarkup([["شروع مجدد"]], resize_keyboard=True))
+    await context.bot.send_message(GROUP_CHAT_ID, msg)
+    await update.message.reply_text("✅ اطلاعات شما ثبت شد. ممنون 🙏")
     return ConversationHandler.END
-
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("لغو شد.")
     return ConversationHandler.END
 
-
-async def run_bot():
-    app_telegram = ApplicationBuilder().token(TOKEN).build()
-
-    # حذف webhook اگر ست شده
-    await app_telegram.bot.delete_webhook()
-
+def run_bot():
+    app_tg = Application.builder().token(TOKEN).build()
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -93,30 +78,13 @@ async def run_bot():
             ASK_PHONE: [
                 MessageHandler(filters.CONTACT, collect),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, collect)
-            ],
+            ]
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
-
-    app_telegram.add_handler(conv_handler)
-
-    print("ربات در حال اجراست...")
-
-    # استارت ربات (غیرمسدود کننده)
-    await app_telegram.start()
-
-    # نگه داشتن ربات در حالت فعال
-    await app_telegram.updater.start_polling()
-
-    # منتظر بمونه تا کلا متوقف بشه (مثلا با سیگنال)
-    await app_telegram.updater.idle()
-
+    app_tg.add_handler(conv_handler)
+    app_tg.run_polling()
 
 if __name__ == "__main__":
-    # اجرای Flask در Thread جدا
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000)).start()
-
-    # گرفتن event loop موجود و اجرای ربات
-    loop = asyncio.get_event_loop()
-    loop.create_task(run_bot())
-    loop.run_forever()
+    run_bot()
