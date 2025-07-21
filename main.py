@@ -5,25 +5,45 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     ContextTypes, filters
 )
+from flask import Flask, request
 
 TOKEN = os.getenv("BOT_TOKEN")
-GROUP_ID = -1002542201765  # آیدی گروه
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # مثلا: https://your-app.onrender.com/webhook
+GROUP_ID = -1002542201765
 
-if not TOKEN:
-    raise ValueError("❌ BOT_TOKEN environment variable is not set.")
+if not TOKEN or not WEBHOOK_URL:
+    raise ValueError("❌ BOT_TOKEN یا WEBHOOK_URL مشخص نشده است.")
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
+app_flask = Flask(__name__)
+application = None  # later assigned
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     intro_text = """
-حمید فتح اللهی فعال در ساخت و تولید انواع پیگمنهای معدنی قابل استفاده در سفال، سرامیک، فلز، شیشه و سیمان
-واردات انواع محصولات از کشورهای شرقی و صادر کننده محصولات به کشورهای عربی و غربی
-محصولات ساختمانی، کشاورزی و طلا
+📌 **معرفی: حمید فتح‌اللهی**
+
+سلام و خوش‌آمدید 🌟
+
+من **حمید فتح‌اللهی** هستم، فعال در حوزه تولید و عرضه انواع **پیگمنت‌های معدنی** قابل استفاده در:
+🎨 سفال، سرامیک، فلز، شیشه و سیمان
+
+همچنین:
+🌏 واردکننده محصولات از کشورهای شرقی  
+🚢 صادرکننده به بازارهای عربی و غربی
+
+✨ محصولات ما شامل:
+🏗️ مصالح ساختمانی
+🌱 محصولات کشاورزی
+💎 و مواد اولیه صنعت طلا
+
+لطفاً برای ادامه، شماره تلفن خود را ارسال کنید. 📱
     """
-    await update.message.reply_text(intro_text.strip())
+    await update.message.reply_markdown(intro_text.strip())
 
     contact_button = KeyboardButton(text="📱 ارسال شماره من", request_contact=True)
     reply_markup = ReplyKeyboardMarkup(
@@ -32,6 +52,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "برای ادامه لطفاً شماره تلفن خود را ارسال کنید:", reply_markup=reply_markup
     )
+
 
 async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     contact: Contact = update.message.contact
@@ -60,8 +81,28 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=GROUP_ID, text=msg)
     await update.message.reply_text("✅ شماره شما ثبت شد. با تشکر 🙏")
 
-if __name__ == '__main__':
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.CONTACT, contact_handler))
-    app.run_polling()
+
+@app_flask.route("/webhook", methods=["POST"])
+def webhook():
+    if request.method == "POST":
+        json_update = request.get_json(force=True)
+        update = Update.de_json(json_update, application.bot)
+        application.update_queue.put(update)
+        return "ok"
+    return "error", 403
+
+
+if __name__ == "__main__":
+    application = ApplicationBuilder().token(TOKEN).concurrent_updates(True).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.CONTACT, contact_handler))
+
+    # ست کردن وبهوک
+    import asyncio
+    async def set_webhook():
+        await application.bot.set_webhook(WEBHOOK_URL + "/webhook")
+        logging.info("✅ Webhook set to: %s/webhook", WEBHOOK_URL)
+
+    asyncio.run(set_webhook())
+    # اجرای سرور Flask
+    app_flask.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
