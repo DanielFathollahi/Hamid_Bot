@@ -3,9 +3,7 @@ import threading
 import asyncio
 import re
 from flask import Flask
-from telegram import (
-    Update, KeyboardButton, ReplyKeyboardMarkup
-)
+from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     ContextTypes, filters, ConversationHandler
@@ -60,7 +58,6 @@ async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     phone = contact.phone_number if contact else update.message.text
     description = context.user_data.get("description", "")
 
-    # اعتبارسنجی شماره تلفن ساده
     if not re.match(r"^\+?\d{10,15}$", phone):
         await update.message.reply_text("شماره تلفن وارد شده معتبر نیست، لطفاً دوباره تلاش کنید.")
         return ASK_PHONE
@@ -96,7 +93,7 @@ async def run_bot():
             ASK_PHONE: [
                 MessageHandler(filters.CONTACT, collect),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, collect)
-            ]
+            ],
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
@@ -104,14 +101,22 @@ async def run_bot():
     app_telegram.add_handler(conv_handler)
 
     print("ربات در حال اجراست...")
-    await app_telegram.run_polling()
+
+    # استارت ربات (غیرمسدود کننده)
+    await app_telegram.start()
+
+    # نگه داشتن ربات در حالت فعال
+    await app_telegram.updater.start_polling()
+
+    # منتظر بمونه تا کلا متوقف بشه (مثلا با سیگنال)
+    await app_telegram.updater.idle()
 
 
 if __name__ == "__main__":
-    # اجرای وب‌سرور Flask در Thread جدا
+    # اجرای Flask در Thread جدا
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000)).start()
 
-    # اجرای ربات تلگرام در event loop موجود
+    # گرفتن event loop موجود و اجرای ربات
     loop = asyncio.get_event_loop()
     loop.create_task(run_bot())
     loop.run_forever()
