@@ -39,19 +39,13 @@ intro_text = """
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.message.from_user
-
-    # معرفی
     await update.message.reply_text(intro_text)
-
-    # درخواست توضیحات
     await update.message.reply_text("لطفاً درباره کار خود و خودتان توضیح بدهید ✍️")
     return ASK_DESCRIPTION
 
 async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["description"] = update.message.text
 
-    # درخواست شماره
     keyboard = [[KeyboardButton("📱 ارسال شماره", request_contact=True)]]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     await update.message.reply_text(
@@ -67,7 +61,6 @@ async def collect_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     description = context.user_data.get("description", "ندارد")
 
-    # آماده‌کردن پیام برای گروه
     msg = (
         f"📥 اطلاعات جدید از کاربر:\n\n"
         f"👤 نام: {user.first_name} {user.last_name or ''}\n"
