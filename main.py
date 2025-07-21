@@ -1,25 +1,27 @@
 import os
 import threading
 from flask import Flask
-from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler,
-    ConversationHandler, ContextTypes, filters
+    ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler,
+    ContextTypes, filters, ConversationHandler
 )
 
-TOKEN = os.getenv("TOKEN")
+TOKEN = os.environ["TOKEN"]
 GROUP_CHAT_ID = -1002542201765
 
 app = Flask(__name__)
 
-@app.route('/')
+ASK_DESCRIPTION, ASK_PHONE = range(2)
+
+@app.route('/ping')
 def ping():
     return 'pong'
 
-ASK_DESCRIPTION, ASK_PHONE = range(2)
 
+# کد ربات
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    intro_text = """
+    intro = """
 📌 معرفی: حمید فتح‌اللهی
 
 سلام و خوش‌آمدید 🌟
@@ -36,9 +38,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🌱 محصولات کشاورزی
 💎 و مواد اولیه صنعت طلا
 """
-    await update.message.reply_text(intro_text)
+    await update.message.reply_text(intro)
     await update.message.reply_text("لطفاً درباره کار خود و خودتان توضیح دهید ✍️")
     return ASK_DESCRIPTION
+
 
 async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["description"] = update.message.text
@@ -47,6 +50,7 @@ async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("لطفاً شماره تلفن خود را ارسال کنید 📱", reply_markup=markup)
     return ASK_PHONE
 
+
 async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     contact = update.message.contact
@@ -54,23 +58,26 @@ async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     description = context.user_data.get("description", "")
 
     msg = (
-        f"👤 {user.first_name} {user.last_name or ''}\n"
-        f"🆔 {user.id}\n"
-        f"🔗 @{user.username or 'ندارد'}\n"
-        f"📝 {description}\n"
-        f"📞 {phone}"
+        f"👤 نام: {user.first_name} {user.last_name or ''}\n"
+        f"🆔 آیدی عددی: {user.id}\n"
+        f"🔗 یوزرنیم: @{user.username or 'ندارد'}\n"
+        f"📝 توضیحات: {description}\n"
+        f"📞 شماره: {phone}"
     )
 
-    await context.bot.send_message(GROUP_CHAT_ID, msg)
+    await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=msg)
     await update.message.reply_text("✅ اطلاعات شما ثبت شد. ممنون 🙏")
     return ConversationHandler.END
+
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("لغو شد.")
     return ConversationHandler.END
 
+
 def run_bot():
-    app_tg = Application.builder().token(TOKEN).build()
+    app_telegram = ApplicationBuilder().token(TOKEN).build()
+
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -82,9 +89,15 @@ def run_bot():
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
-    app_tg.add_handler(conv_handler)
-    app_tg.run_polling()
+
+    app_telegram.add_handler(conv_handler)
+
+    print("ربات در حال اجراست...")
+    app_telegram.run_polling()
+
 
 if __name__ == "__main__":
+    # اجرای وب‌سرور Flask در Thread جدا
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000)).start()
+    # اجرای ربات تلگرام
     run_bot()
