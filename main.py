@@ -1,11 +1,10 @@
 import os
 import threading
-
 from flask import Flask
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler,
-    filters, ContextTypes, ConversationHandler
+    Application, CommandHandler, MessageHandler,
+    ConversationHandler, ContextTypes, filters
 )
 
 TOKEN = os.environ["TOKEN"]
@@ -17,7 +16,6 @@ app = Flask(__name__)
 def ping():
     return 'pong'
 
-# مراحل گفتگو
 ASK_DESCRIPTION, ASK_PHONE = range(2)
 
 intro_text = """
@@ -45,7 +43,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["description"] = update.message.text
-
     keyboard = [[KeyboardButton("📱 ارسال شماره", request_contact=True)]]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     await update.message.reply_text(
@@ -81,7 +78,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def run_bot():
-    app_telegram = ApplicationBuilder().token(TOKEN).build()
+    app_telegram = Application.builder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -96,7 +93,6 @@ def run_bot():
     )
 
     app_telegram.add_handler(conv_handler)
-
     print("ربات در حال اجراست...")
     app_telegram.run_polling()
 
