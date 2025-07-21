@@ -8,11 +8,10 @@ from telegram.ext import (
 from flask import Flask, request
 
 TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # مثلا: https://your-app.onrender.com/webhook
 GROUP_ID = -1002542201765
 
-if not TOKEN or not WEBHOOK_URL:
-    raise ValueError("❌ BOT_TOKEN یا WEBHOOK_URL مشخص نشده است.")
+if not TOKEN:
+    raise ValueError("❌ BOT_TOKEN environment variable is not set.")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,7 +19,7 @@ logging.basicConfig(
 )
 
 app_flask = Flask(__name__)
-application = None  # later assigned
+application = None
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -32,7 +31,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 من **حمید فتح‌اللهی** هستم، فعال در حوزه تولید و عرضه انواع **پیگمنت‌های معدنی** قابل استفاده در:
 🎨 سفال، سرامیک، فلز، شیشه و سیمان
 
-همچنین:
 🌏 واردکننده محصولات از کشورهای شرقی  
 🚢 صادرکننده به بازارهای عربی و غربی
 
@@ -97,12 +95,13 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.CONTACT, contact_handler))
 
-    # ست کردن وبهوک
     import asyncio
     async def set_webhook():
-        await application.bot.set_webhook(WEBHOOK_URL + "/webhook")
-        logging.info("✅ Webhook set to: %s/webhook", WEBHOOK_URL)
+        # Render domain مثلا https://your-app.onrender.com
+        render_url = os.getenv("RENDER_EXTERNAL_URL") or "https://your-app.onrender.com"
+        webhook_url = render_url + "/webhook"
+        await application.bot.set_webhook(webhook_url)
+        logging.info("✅ Webhook set to: %s", webhook_url)
 
     asyncio.run(set_webhook())
-    # اجرای سرور Flask
     app_flask.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
