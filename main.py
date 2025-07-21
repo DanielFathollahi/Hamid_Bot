@@ -1,7 +1,10 @@
 import os
 import threading
+import asyncio
 from flask import Flask
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+from telegram import (
+    Update, KeyboardButton, ReplyKeyboardMarkup
+)
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler,
     ContextTypes, filters, ConversationHandler
@@ -19,7 +22,6 @@ def ping():
     return 'pong'
 
 
-# کد ربات
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     intro = """
 📌 معرفی: حمید فتح‌اللهی
@@ -51,11 +53,18 @@ async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ASK_PHONE
 
 
+import re
+
 async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     contact = update.message.contact
     phone = contact.phone_number if contact else update.message.text
     description = context.user_data.get("description", "")
+
+    # اعتبارسنجی شماره تلفن ساده
+    if not re.match(r"^\+?\d{10,15}$", phone):
+        await update.message.reply_text("شماره تلفن وارد شده معتبر نیست، لطفاً دوباره تلاش کنید.")
+        return ASK_PHONE
 
     msg = (
         f"👤 نام: {user.first_name} {user.last_name or ''}\n"
@@ -66,7 +75,7 @@ async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=msg)
-    await update.message.reply_text("✅ اطلاعات شما ثبت شد. ممنون 🙏")
+    await update.message.reply_text("✅ اطلاعات شما ثبت شد. ممنون 🙏", reply_markup=ReplyKeyboardMarkup([["شروع مجدد"]], resize_keyboard=True))
     return ConversationHandler.END
 
 
@@ -75,8 +84,11 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-def run_bot():
+async def run_bot():
     app_telegram = ApplicationBuilder().token(TOKEN).build()
+
+    # حذف webhook اگر ست شده
+    await app_telegram.bot.delete_webhook()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -93,11 +105,11 @@ def run_bot():
     app_telegram.add_handler(conv_handler)
 
     print("ربات در حال اجراست...")
-    app_telegram.run_polling()
+    await app_telegram.run_polling()
 
 
 if __name__ == "__main__":
     # اجرای وب‌سرور Flask در Thread جدا
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000)).start()
-    # اجرای ربات تلگرام
-    run_bot()
+    # اجرای ربات تلگرام در حلقه async
+    asyncio.run(run_bot())
