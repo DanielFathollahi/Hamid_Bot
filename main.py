@@ -1,107 +1,112 @@
 import os
-import logging
-from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, Contact
+import threading
+
+from flask import Flask
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
-    ContextTypes, filters
-)
-from flask import Flask, request
-
-TOKEN = os.getenv("BOT_TOKEN")
-GROUP_ID = -1002542201765
-
-if not TOKEN:
-    raise ValueError("❌ BOT_TOKEN environment variable is not set.")
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    filters, ContextTypes, ConversationHandler
 )
 
-app_flask = Flask(__name__)
-application = None
+TOKEN = os.environ["TOKEN"]
+GROUP_CHAT_ID = -1002542201765
 
+app = Flask(__name__)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    intro_text = """
-📌 **معرفی: حمید فتح‌اللهی**
+@app.route('/ping')
+def ping():
+    return 'pong'
+
+# مراحل گفتگو
+ASK_DESCRIPTION, ASK_PHONE = range(2)
+
+intro_text = """
+📌 معرفی: حمید فتح‌اللهی
 
 سلام و خوش‌آمدید 🌟
 
-من **حمید فتح‌اللهی** هستم، فعال در حوزه تولید و عرضه انواع **پیگمنت‌های معدنی** قابل استفاده در:
+من حمید فتح‌اللهی هستم، فعال در حوزه تولید و عرضه انواع پیگمنت‌های معدنی قابل استفاده در:
 🎨 سفال، سرامیک، فلز، شیشه و سیمان
 
-🌏 واردکننده محصولات از کشورهای شرقی  
+همچنین:
+🌏 واردکننده محصولات از کشورهای شرقی
 🚢 صادرکننده به بازارهای عربی و غربی
 
-✨ محصولات ما شامل:
+✨ محصولات ما شامل طیف گسترده‌ای از:
 🏗️ مصالح ساختمانی
 🌱 محصولات کشاورزی
 💎 و مواد اولیه صنعت طلا
+"""
 
-لطفاً برای ادامه، شماره تلفن خود را ارسال کنید. 📱
-    """
-    await update.message.reply_markdown(intro_text.strip())
-
-    contact_button = KeyboardButton(text="📱 ارسال شماره من", request_contact=True)
-    reply_markup = ReplyKeyboardMarkup(
-        [[contact_button]], resize_keyboard=True, one_time_keyboard=True
-    )
-    await update.message.reply_text(
-        "برای ادامه لطفاً شماره تلفن خود را ارسال کنید:", reply_markup=reply_markup
-    )
-
-
-async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    contact: Contact = update.message.contact
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
 
-    if not contact or not contact.phone_number:
-        await update.message.reply_text("⚠️ شماره معتبر دریافت نشد. لطفاً دوباره تلاش کنید.")
-        return
+    # معرفی
+    await update.message.reply_text(intro_text)
 
-    phone_number = contact.phone_number
-    first_name = user.first_name or "-"
-    last_name = user.last_name or "-"
-    username = f"@{user.username}" if user.username else "-"
-    user_id = user.id
+    # درخواست توضیحات
+    await update.message.reply_text("لطفاً درباره کار خود و خودتان توضیح بدهید ✍️")
+    return ASK_DESCRIPTION
 
+async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["description"] = update.message.text
+
+    # درخواست شماره
+    keyboard = [[KeyboardButton("📱 ارسال شماره", request_contact=True)]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text(
+        "جهت کسب اطلاعات بیشتر یا همکاری، لطفاً شماره تلفن خود را ارسال کنید. 📱",
+        reply_markup=reply_markup
+    )
+    return ASK_PHONE
+
+async def collect_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    contact = update.message.contact
+    phone_number = contact.phone_number if contact else update.message.text
+
+    description = context.user_data.get("description", "ندارد")
+
+    # آماده‌کردن پیام برای گروه
     msg = (
-        f"📥 ثبت‌نام جدید:\n"
-        f"👤 نام: {first_name} {last_name}\n"
-        f"🔗 آیدی: {username}\n"
-        f"🆔 عددی: {user_id}\n"
+        f"📥 اطلاعات جدید از کاربر:\n\n"
+        f"👤 نام: {user.first_name} {user.last_name or ''}\n"
+        f"🆔 آیدی عددی: {user.id}\n"
+        f"🔗 یوزرنیم: @{user.username if user.username else 'ندارد'}\n"
+        f"📝 توضیحات: {description}\n"
         f"📞 شماره: {phone_number}"
     )
 
-    logging.info(f"New registration: {msg.replace(chr(10), ' | ')}")
+    await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=msg)
 
-    await context.bot.send_message(chat_id=GROUP_ID, text=msg)
-    await update.message.reply_text("✅ شماره شما ثبت شد. با تشکر 🙏")
+    await update.message.reply_text("✅ اطلاعات شما ثبت شد. ممنون از شما 🙏")
 
+    return ConversationHandler.END
 
-@app_flask.route("/webhook", methods=["POST"])
-def webhook():
-    if request.method == "POST":
-        json_update = request.get_json(force=True)
-        update = Update.de_json(json_update, application.bot)
-        application.update_queue.put(update)
-        return "ok"
-    return "error", 403
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("گفتگو لغو شد.")
+    return ConversationHandler.END
 
+def run_bot():
+    app_telegram = ApplicationBuilder().token(TOKEN).build()
+
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            ASK_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_phone)],
+            ASK_PHONE: [
+                MessageHandler(filters.CONTACT, collect_data),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, collect_data),
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+
+    app_telegram.add_handler(conv_handler)
+
+    print("ربات در حال اجراست...")
+    app_telegram.run_polling()
 
 if __name__ == "__main__":
-    application = ApplicationBuilder().token(TOKEN).concurrent_updates(True).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.CONTACT, contact_handler))
-
-    import asyncio
-    async def set_webhook():
-        # Render domain مثلا https://your-app.onrender.com
-        render_url = os.getenv("RENDER_EXTERNAL_URL") or "https://your-app.onrender.com"
-        webhook_url = render_url + "/webhook"
-        await application.bot.set_webhook(webhook_url)
-        logging.info("✅ Webhook set to: %s", webhook_url)
-
-    asyncio.run(set_webhook())
-    app_flask.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000)).start()
+    run_bot()
