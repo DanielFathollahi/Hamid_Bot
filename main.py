@@ -1,12 +1,13 @@
 import os
 import threading
 import asyncio
+import re
 from flask import Flask
 from telegram import (
     Update, KeyboardButton, ReplyKeyboardMarkup
 )
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler,
+    ApplicationBuilder, CommandHandler, MessageHandler,
     ContextTypes, filters, ConversationHandler
 )
 
@@ -52,8 +53,6 @@ async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("لطفاً شماره تلفن خود را ارسال کنید 📱", reply_markup=markup)
     return ASK_PHONE
 
-
-import re
 
 async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
@@ -111,5 +110,8 @@ async def run_bot():
 if __name__ == "__main__":
     # اجرای وب‌سرور Flask در Thread جدا
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000)).start()
-    # اجرای ربات تلگرام در حلقه async
-    asyncio.run(run_bot())
+
+    # اجرای ربات تلگرام در event loop موجود
+    loop = asyncio.get_event_loop()
+    loop.create_task(run_bot())
+    loop.run_forever()
