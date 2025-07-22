@@ -1,6 +1,6 @@
 import os
 import threading
-from datetime import datetime, date
+from datetime import date
 from flask import Flask
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
@@ -32,10 +32,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("العربية", callback_data="lang_ar")],
         [InlineKeyboardButton("中文", callback_data="lang_zh")]
     ]
-    await update.message.reply_text(
-        "🌐 لطفاً زبان خود را انتخاب کنید:", 
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.message.reply_text(
+            "🌐 لطفاً زبان خود را انتخاب کنید:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    else:
+        await update.message.reply_text(
+            "🌐 لطفاً زبان خود را انتخاب کنید:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
 async def language_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -128,16 +136,8 @@ async def chat_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text.lower()
 
-    # افزایش شمارنده
-    context.user_data["ai_count"] = count + 1
-
-    # جلوگیری از سوالات ممنوعه
-    if "توکن" in text or "token" in text:
-        await update.message.reply_text("❌ اجازه ندارم در این مورد صحبت کنم.")
-        return
-
-    # پاسخ به سوال درباره حمید فتح اللهی
-    if "حمید فتح اللهی کیه" in text or "who is hamid fathollahi" in text:
+    # اگر درباره حمید فتح اللهی پرسیده شده، پیام معرفی رو بفرسته و چت هوش مصنوعی نده
+    if any(phrase in text for phrase in ["حمید فتح اللهی کیه", "who is hamid fathollahi", "حمید فتح اللهی کیست"]):
         intro_text = """
 📌 معرفی: حمید فتح‌اللهی
 
@@ -157,10 +157,13 @@ async def chat_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(intro_text)
         return
 
-    # پاسخ به سوال درباره رنگ و کار ما
-    if ("رنگ" in text or "پیگمنت" in text or "کار ما" in text) and ("چی" in text or "چیست" in text or "درباره" in text):
-        await update.message.reply_text("✅ ما جزو بهترین‌های این صنعت هستیم و محصولاتمان را پیشنهاد می‌کنیم.")
+    # جلوگیری از سوالات مربوط به توکن و ... 
+    if "توکن" in text or "token" in text:
+        await update.message.reply_text("❌ اجازه ندارم در این مورد صحبت کنم.")
         return
+
+    # افزایش شمارنده
+    context.user_data["ai_count"] = count + 1
 
     # پاسخ هوش مصنوعی
     response = model.start_chat().send_message(update.message.text)
