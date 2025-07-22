@@ -40,7 +40,7 @@ LANG_NAMES = {
 }
 
 TEXTS = {
-    "lang_select": "🌐 لطفاً زبان / Please select your language / اختر لغتك / 请选择您的语言：",
+    "lang_select": "🌐 لطفاً زبان / Please select your language / اختر لغتك / 请选择您的语言:",
     "options": {
         "fa": ["📄 درباره من و همکاری با ما", "🤖 چت با هوش مصنوعی"],
         "en": ["📄 About Me and Collaboration", "🤖 Chat with AI"],
@@ -115,13 +115,16 @@ async def language_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     lang = query.data.split("_")[1]
     context.user_data["lang"] = lang
+    await show_main_menu(query.message, lang)
 
+
+async def show_main_menu(message, lang):
     options = get_text("options", lang)
     keyboard = [
         [InlineKeyboardButton(options[0], callback_data="about_us")],
         [InlineKeyboardButton(options[1], callback_data="chat_ai")]
     ]
-    await query.message.reply_text("👇", reply_markup=InlineKeyboardMarkup(keyboard))
+    await message.reply_text("👇", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def about_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -191,11 +194,7 @@ async def chat_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = update.message.text.lower()
-
-    trigger_phrases = [
-        "حمید فتح اللهی", "hamid fathollahi", "حميد فتح اللهي", "哈米德"
-    ]
-
+    trigger_phrases = ["حمید فتح اللهی", "hamid fathollahi", "حميد فتح اللهي", "哈米德"]
     if any(phrase in text for phrase in trigger_phrases):
         await update.message.reply_text(get_text("intro_about", lang))
         return
@@ -206,20 +205,18 @@ async def chat_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["ai_count"] = count + 1
 
-    # فقط یک پاسخ کوتاه بدهد
     response = model.generate_content(text)
     await update.message.reply_text(response.text)
 
-    keyboard = [
-        [InlineKeyboardButton(get_text("back_to_main", lang), callback_data="back_to_main")]
-    ]
+    keyboard = [[InlineKeyboardButton(get_text("back_to_main", lang), callback_data="back_to_main")]]
     await update.message.reply_text("⬅️", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await start(update, context)
+    lang = context.user_data.get("lang", "fa")
+    await show_main_menu(query.message, lang)
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
