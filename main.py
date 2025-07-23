@@ -12,11 +12,10 @@ from datetime import datetime
 
 TOKEN = os.getenv("BOT_TOKEN")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-GROUP_CHAT_ID = -1002542201765
 
 app = Flask(__name__)
 
-LANGUAGE, MENU, ABOUT_NAME, ABOUT_JOB, ABOUT_PHONE, ABOUT_EMAIL, AI_CHAT = range(7)
+LANGUAGE, MENU, ABOUT_JOB, ABOUT_PHONE, AI_CHAT = range(5)
 
 languages = {
     "fa": {"flag": "🇮🇷", "name": "فارسی"},
@@ -57,23 +56,67 @@ I am Hamid Fathollahi, active in the production and supply of mineral pigments f
 🌱 Agricultural products
 💎 Gold industry raw materials
 🖨️ Digital printing inks
+""",
+    "ar": """📌 عني والتعاون معنا:
+
+مرحبًا بكم 🌟
+
+أنا حميد فتح اللهي، ناشط في إنتاج وتوريد أصباغ معدنية تُستخدم في:
+🎨 الفخار، السيراميك، المعادن، الزجاج والأسمنت
+
+🌏 مستورد من الدول الشرقية
+🚢 ومُصدر للأسواق العربية والغربية
+
+✨ منتجاتنا تشمل:
+🏗️ مواد البناء
+🌱 المنتجات الزراعية
+💎 مواد خام لصناعة الذهب
+🖨️ وأحبار الطباعة الرقمية
+""",
+    "zh": """📌 关于我 & 合作:
+
+欢迎 🌟
+
+我是 Hamid Fathollahi，致力于生产和供应用于以下领域的矿物颜料：
+🎨 陶瓷、金属、玻璃和水泥
+
+🌏 从东方国家进口
+🚢 向阿拉伯和西方市场出口
+
+✨ 我们的产品包括：
+🏗️ 建筑材料
+🌱 农产品
+💎 黄金行业原材料
+🖨️ 数码印刷油墨
 """
 }
 
-prompts = {
-    "fa": ["👤 لطفاً نام و نام خانوادگی خود را وارد کنید:",
-           "💼 لطفاً درباره شغل خود توضیح دهید:",
-           "📱 لطفاً شماره تماس خود را ارسال کنید:",
-           "📧 لطفاً ایمیل خود را وارد کنید:"],
-    "en": ["👤 Please enter your full name:",
-           "💼 Please describe your job:",
-           "📱 Please send your phone number:",
-           "📧 Please enter your email:"]
+ask_job = {
+    "fa": "💼 لطفاً درباره کار خود توضیح دهید:",
+    "en": "💼 Please describe your job:",
+    "ar": "💼 من فضلك صف عملك:",
+    "zh": "💼 请描述你的工作："
+}
+
+ask_phone = {
+    "fa": "📱 لطفاً شماره تماس خود را ارسال کنید:",
+    "en": "📱 Please send your phone number:",
+    "ar": "📱 من فضلك أرسل رقم هاتفك:",
+    "zh": "📱 请发送你的电话号码："
 }
 
 thank_you = {
     "fa": "✅ ممنون! 🔙 برای بازگشت /menu را بزنید",
-    "en": "✅ Thank you! 🔙 To go back press /menu"
+    "en": "✅ Thank you! 🔙 To go back press /menu",
+    "ar": "✅ شكرًا لك! 🔙 للعودة اضغط /menu",
+    "zh": "✅ 谢谢你！🔙 返回请按 /menu"
+}
+
+back_menu = {
+    "fa": "🔙 برای بازگشت /menu را بزنید",
+    "en": "🔙 To go back press /menu",
+    "ar": "🔙 للعودة اضغط /menu",
+    "zh": "🔙 返回请按 /menu"
 }
 
 user_sessions = {}
@@ -102,11 +145,13 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data["lang"]
     text = {
         "fa": "📋 لطفاً یکی را انتخاب کنید:",
-        "en": "📋 Please choose an option:"
+        "en": "📋 Please choose an option:",
+        "ar": "📋 الرجاء اختيار خيار:",
+        "zh": "📋 请选择一个选项："
     }[lang]
     buttons = [
-        [InlineKeyboardButton({"fa": "📄 درباره من و همکاری", "en": "📄 About me & Cooperation"}[lang], callback_data="about")],
-        [InlineKeyboardButton({"fa": "🤖 چت با هوش مصنوعی", "en": "🤖 Chat with AI"}[lang], callback_data="ai_chat")]
+        [InlineKeyboardButton({"fa": "📄 درباره من و همکاری", "en": "📄 About me & Cooperation", "ar": "📄 عني والتعاون", "zh": "📄 关于我 & 合作"}[lang], callback_data="about")],
+        [InlineKeyboardButton({"fa": "🤖 چت با هوش مصنوعی", "en": "🤖 Chat with AI", "ar": "🤖 الدردشة مع الذكاء الاصطناعي", "zh": "🤖 与AI聊天"}[lang], callback_data="ai_chat")]
     ]
     await update.callback_query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
     return MENU
@@ -115,45 +160,25 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data["lang"]
     await update.callback_query.answer()
     await update.callback_query.message.reply_text(about_us[lang])
-    await update.callback_query.message.reply_text(prompts[lang][0])  # ask name
-    return ABOUT_NAME
-
-async def about_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data["lang"]
-    context.user_data["full_name"] = update.message.text
-    await update.message.reply_text(prompts[lang][1])  # ask job
+    await update.callback_query.message.reply_text(ask_job[lang])
     return ABOUT_JOB
 
 async def about_job(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data["lang"]
     context.user_data["job_desc"] = update.message.text
-    await update.message.reply_text(prompts[lang][2])  # ask phone
+    await update.message.reply_text(ask_phone[lang])
     return ABOUT_PHONE
 
 async def about_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data["lang"]
     context.user_data["phone"] = update.message.text
-    await update.message.reply_text(prompts[lang][3])  # ask email
-    return ABOUT_EMAIL
-
-async def about_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data["lang"]
-    context.user_data["email"] = update.message.text
-
-    msg_to_group = f"""📩 درباره‌ی خود و شغل خود:
-👤 نام: {context.user_data['full_name']}
-💼 شغل: {context.user_data['job_desc']}
-📱 شماره: {context.user_data['phone']}
-📧 ایمیل: {context.user_data['email']}"""
-
-    await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=msg_to_group)
     await update.message.reply_text(thank_you[lang])
     return MENU
 
 async def ai_chat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data["lang"]
     await update.callback_query.answer()
-    await update.callback_query.message.reply_text(f"✍️ {thank_you[lang]}")
+    await update.callback_query.message.reply_text(f"✍️ {back_menu[lang]}")
     return AI_CHAT
 
 async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -169,7 +194,9 @@ async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if session["count"] >= 5:
         await update.message.reply_text("🚫 " + {
             "fa": "شما امروز به ۵ پیام رسیدید.",
-            "en": "You reached the 5 messages limit today."
+            "en": "You reached the 5 messages limit today.",
+            "ar": "لقد وصلت إلى 5 رسائل اليوم.",
+            "zh": "您今天已达到5条消息的限制。"
         }[lang])
         return AI_CHAT
 
@@ -210,10 +237,8 @@ def main():
                 CallbackQueryHandler(about, pattern="^about$"),
                 CallbackQueryHandler(ai_chat_start, pattern="^ai_chat$")
             ],
-            ABOUT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, about_name)],
             ABOUT_JOB: [MessageHandler(filters.TEXT & ~filters.COMMAND, about_job)],
             ABOUT_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, about_phone)],
-            ABOUT_EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, about_email)],
             AI_CHAT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat),
                 CommandHandler("menu", menu)
