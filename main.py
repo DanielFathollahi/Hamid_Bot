@@ -19,7 +19,7 @@ app = Flask(__name__)
 def ping():
     return 'pong'
 
-ASK_LANGUAGE, ASK_DESCRIPTION, ASK_PHONE = range(3)
+ASK_LANGUAGE, ASK_NAME, ASK_JOB, ASK_PHONE, ASK_EMAIL = range(5)
 
 translations = {
     'fa': {
@@ -41,8 +41,10 @@ translations = {
 💎 مواد اولیه صنعت طلا
 🖨️ و جوهرهای چاپ دیجیتال
 """,
-        'desc': "لطفاً درباره کار خود و خودتان توضیح دهید ✍️",
-        'phone': "لطفاً شماره تلفن خود را ارسال کنید 📱",
+        'ask_name': "لطفاً نام و نام خانوادگی خود را وارد کنید ✍️",
+        'ask_job': "لطفاً اطلاعات شغلی خود را بنویسید ✍️",
+        'ask_phone': "لطفاً شماره تلفن خود را ارسال کنید 📱",
+        'ask_email': "لطفاً ایمیل خود را وارد کنید 📧",
         'thanks': "✅ اطلاعات شما ثبت شد. ممنون 🙏",
         'cancel': "لغو شد."
     },
@@ -65,8 +67,10 @@ Also:
 💎 raw materials for the gold industry
 🖨️ and digital printing inks
 """,
-        'desc': "Please describe yourself and your work ✍️",
-        'phone': "Please send your phone number 📱",
+        'ask_name': "Please enter your full name ✍️",
+        'ask_job': "Please describe your job or business ✍️",
+        'ask_phone': "Please send your phone number 📱",
+        'ask_email': "Please enter your email address 📧",
         'thanks': "✅ Your information has been recorded. Thank you 🙏",
         'cancel': "Cancelled."
     },
@@ -89,8 +93,10 @@ Also:
 💎 المواد الخام لصناعة الذهب
 🖨️ وأحبار الطباعة الرقمية
 """,
-        'desc': "يرجى تقديم نفسك وعملك ✍️",
-        'phone': "يرجى إرسال رقم هاتفك 📱",
+        'ask_name': "يرجى إدخال الاسم الكامل ✍️",
+        'ask_job': "يرجى وصف عملك أو مهنتك ✍️",
+        'ask_phone': "يرجى إرسال رقم الهاتف 📱",
+        'ask_email': "يرجى إدخال البريد الإلكتروني 📧",
         'thanks': "✅ تم تسجيل معلوماتك. شكرًا 🙏",
         'cancel': "تم الإلغاء."
     },
@@ -113,8 +119,10 @@ Also:
 💎 黄金工业的原材料
 🖨️ 以及数码印刷油墨
 """,
-        'desc': "请介绍一下您自己和您的工作 ✍️",
-        'phone': "请发送您的电话号码 📱",
+        'ask_name': "请输入您的全名 ✍️",
+        'ask_job': "请输入您的职业信息 ✍️",
+        'ask_phone': "请发送您的电话号码 📱",
+        'ask_email': "请输入您的电子邮件地址 📧",
         'thanks': "✅ 您的信息已记录。谢谢 🙏",
         'cancel': "已取消。"
     }
@@ -122,7 +130,6 @@ Also:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-
     keyboard = [
         [
             InlineKeyboardButton("🇮🇷 فارسی", callback_data='fa'),
@@ -142,38 +149,53 @@ async def choose_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     lang = query.data
     context.user_data['lang'] = lang
-
     await query.message.reply_text(translations[lang]['intro'])
-    await query.message.reply_text(translations[lang]['desc'])
-    return ASK_DESCRIPTION
+    await query.message.reply_text(translations[lang]['ask_name'])
+    return ASK_NAME
+
+async def ask_job(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = context.user_data.get('lang', 'fa')
+    context.user_data["full_name"] = update.message.text
+    await update.message.reply_text(translations[lang]['ask_job'], reply_markup=ReplyKeyboardMarkup([['/cancel']], one_time_keyboard=True, resize_keyboard=True))
+    return ASK_JOB
 
 async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get('lang', 'fa')
-    context.user_data["description"] = update.message.text
-
-    keyboard = [[KeyboardButton("📱 ارسال شماره", request_contact=True)]]
+    context.user_data["job_info"] = update.message.text
+    keyboard = [[KeyboardButton("📱 ارسال شماره", request_contact=True)], ['/cancel']]
     markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-
-    await update.message.reply_text(translations[lang]['phone'], reply_markup=markup)
+    await update.message.reply_text(translations[lang]['ask_phone'], reply_markup=markup)
     return ASK_PHONE
+
+async def ask_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = context.user_data.get('lang', 'fa')
+    contact = update.message.contact
+    phone = contact.phone_number if contact else update.message.text
+    context.user_data["phone"] = phone
+    await update.message.reply_text(translations[lang]['ask_email'], reply_markup=ReplyKeyboardMarkup([['/cancel']], one_time_keyboard=True, resize_keyboard=True))
+    return ASK_EMAIL
 
 async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get('lang', 'fa')
     user = update.message.from_user
-    contact = update.message.contact
-    phone = contact.phone_number if contact else update.message.text
-    description = context.user_data.get("description", "")
+    email = update.message.text
+    context.user_data["email"] = email
+
+    full_name = context.user_data.get("full_name", "")
+    job_info = context.user_data.get("job_info", "")
+    phone = context.user_data.get("phone", "")
 
     msg = (
-        f"👤 {user.first_name} {user.last_name or ''}\n"
-        f"🆔 {user.id}\n"
-        f"🔗 @{user.username or 'ندارد'}\n"
-        f"📝 {description}\n"
-        f"📞 {phone}"
+        f"👤 نام و نام خانوادگی: {full_name}\n"
+        f"📝 اطلاعات شغلی: {job_info}\n"
+        f"📞 شماره تماس: {phone}\n"
+        f"📧 ایمیل: {email}\n"
+        f"🆔 آیدی: {user.id}\n"
+        f"🔗 نام کاربری: @{user.username or 'ندارد'}"
     )
 
     await context.bot.send_message(GROUP_CHAT_ID, msg)
-    await update.message.reply_text(translations[lang]['thanks'])
+    await update.message.reply_text(translations[lang]['thanks'], reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True))
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -187,11 +209,13 @@ def run_bot():
         entry_points=[CommandHandler("start", start)],
         states={
             ASK_LANGUAGE: [CallbackQueryHandler(choose_language)],
-            ASK_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_phone)],
+            ASK_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_job)],
+            ASK_JOB: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_phone)],
             ASK_PHONE: [
-                MessageHandler(filters.CONTACT, collect),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, collect)
-            ]
+                MessageHandler(filters.CONTACT, ask_email),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_email)
+            ],
+            ASK_EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, collect)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True
