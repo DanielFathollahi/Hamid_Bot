@@ -1,19 +1,18 @@
 import os
 from flask import Flask
-from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
     ConversationHandler, ContextTypes, filters
 )
-from google.generativeai import GenerativeModel
+from huggingface_hub import InferenceClient
 from datetime import datetime
 
 TOKEN = os.getenv("BOT_TOKEN")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 app = Flask(__name__)
+client = InferenceClient("mistralai/Mistral-7B-Instruct-v0.2", token=HF_TOKEN)
 
 LANGUAGE, MENU, ABOUT_JOB, ABOUT_PHONE, AI_CHAT = range(5)
 
@@ -142,7 +141,7 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return MENU
 
 async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data["lang"]
+    lang = context.user_data.get("lang", "en")
     text = {
         "fa": "📋 لطفاً یکی را انتخاب کنید:",
         "en": "📋 Please choose an option:",
@@ -157,35 +156,35 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return MENU
 
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data["lang"]
+    lang = context.user_data.get("lang", "en")
     await update.callback_query.answer()
     await update.callback_query.message.reply_text(about_us[lang])
     await update.callback_query.message.reply_text(ask_job[lang])
     return ABOUT_JOB
 
 async def about_job(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data["lang"]
+    lang = context.user_data.get("lang", "en")
     context.user_data["job_desc"] = update.message.text
     await update.message.reply_text(ask_phone[lang])
     return ABOUT_PHONE
 
 async def about_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data["lang"]
+    lang = context.user_data.get("lang", "en")
     context.user_data["phone"] = update.message.text
     await update.message.reply_text(thank_you[lang])
     return MENU
 
 async def ai_chat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data["lang"]
+    lang = context.user_data.get("lang", "en")
     await update.callback_query.answer()
     await update.callback_query.message.reply_text(f"✍️ {back_menu[lang]}")
     return AI_CHAT
 
 async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    lang = context.user_data["lang"]
+    lang = context.user_data.get("lang", "en")
     today = datetime.now().date()
-    session = user_sessions.get(user_id)
+    session = user_sessions.setdefault(user_id, {"count": 0, "date": today})
 
     if session["date"] != today:
         session["count"] = 0
@@ -207,9 +206,11 @@ async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     session["count"] += 1
 
-    model = GenerativeModel("gemini-pro", api_key=GOOGLE_API_KEY)
-    response = model.generate_content([update.message.text])
-    answer = response.text.strip().split("\n")[0]
+    try:
+        response = client.text_generation(update.message.text, max_new_tokens=300)
+        answer = response.strip().split("\n")[0] if response else "❗ مشکلی پیش آمد."
+    except Exception as e:
+        answer = f"❌ خطا: {str(e)}"
 
     await update.message.reply_text(f"🤖 {answer}")
     return AI_CHAT
