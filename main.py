@@ -19,7 +19,7 @@ app = Flask(__name__)
 def ping():
     return 'pong'
 
-ASK_LANGUAGE, ASK_DESCRIPTION, ASK_PHONE = range(3)
+ASK_LANGUAGE, ASK_DESCRIPTION, ASK_PHONE, ASK_EMAIL, ASK_JOB = range(5)
 
 translations = {
     'fa': {
@@ -41,94 +41,30 @@ translations = {
 💎 مواد اولیه صنعت طلا
 🖨️ و جوهرهای چاپ دیجیتال
 """,
-        'desc': "لطفاً درباره کار خود و خودتان توضیح دهید ✍️",
-        'phone': "لطفاً شماره تلفن خود را ارسال کنید 📱",
+        'desc': "لطفاً درباره کار خود توضیح دهید ✍️",
+        'phone': "شماره تماس خود را ارسال کنید یا دکمه زیر را بزنید 📱",
+        'email': "لطفاً ایمیل خود را وارد کنید 📧",
+        'job': "شغل یا زمینه فعالیت خود را وارد کنید 💼",
         'thanks': "✅ اطلاعات شما ثبت شد. ممنون 🙏",
         'cancel': "لغو شد."
     },
     'en': {
-        'intro': """
-📌 About Me & Cooperation:
-
-Hello and welcome 🌟
-
-I am Hamid Fathollahi, active in the production and supply of various mineral pigments used in:
-🎨 pottery, ceramics, metals, glass, and cement
-
-Also:
-🌏 Importer from eastern countries
-🚢 Exporter to Arab and Western markets
-
-✨ Our products include a wide range of:
-🏗️ building materials
-🌱 agricultural products
-💎 raw materials for the gold industry
-🖨️ and digital printing inks
-""",
-        'desc': "Please describe yourself and your work ✍️",
-        'phone': "Please send your phone number 📱",
-        'thanks': "✅ Your information has been recorded. Thank you 🙏",
+        'intro': "📌 About Me & Cooperation:\n\nWelcome 🌟...",
+        'desc': "Please describe your work ✍️",
+        'phone': "Send your phone number or click the button 📱",
+        'email': "Please enter your email 📧",
+        'job': "Enter your job or business field 💼",
+        'thanks': "✅ Your information was saved. Thank you 🙏",
         'cancel': "Cancelled."
-    },
-    'ar': {
-        'intro': """
-📌 عني والتعاون معنا:
-
-مرحبًا بكم 🌟
-
-أنا حميد فتح‌اللهي، ناشط في إنتاج وتوريد أصباغ معدنية متنوعة تُستخدم في:
-🎨 الفخار، السيراميك، المعادن، الزجاج والإسمنت
-
-وأيضًا:
-🌏 مستورد من الدول الشرقية
-🚢 ومصدر للأسواق العربية والغربية
-
-✨ تشمل منتجاتنا مجموعة واسعة من:
-🏗️ مواد البناء
-🌱 المنتجات الزراعية
-💎 المواد الخام لصناعة الذهب
-🖨️ وأحبار الطباعة الرقمية
-""",
-        'desc': "يرجى تقديم نفسك وعملك ✍️",
-        'phone': "يرجى إرسال رقم هاتفك 📱",
-        'thanks': "✅ تم تسجيل معلوماتك. شكرًا 🙏",
-        'cancel': "تم الإلغاء."
-    },
-    'zh': {
-        'intro': """
-📌 关于我与合作：
-
-您好，欢迎 🌟
-
-我是 Hamid Fathollahi，活跃于各种矿物颜料的生产和供应，这些颜料可用于：
-🎨 陶瓷、陶器、金属、玻璃和水泥
-
-此外：
-🌏 从东方国家进口
-🚢 向阿拉伯和西方市场出口
-
-✨ 我们的产品包括广泛的：
-🏗️ 建筑材料
-🌱 农产品
-💎 黄金工业的原材料
-🖨️ 以及数码印刷油墨
-""",
-        'desc': "请介绍一下您自己和您的工作 ✍️",
-        'phone': "请发送您的电话号码 📱",
-        'thanks': "✅ 您的信息已记录。谢谢 🙏",
-        'cancel': "已取消。"
     }
+    # Add other languages if needed
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # پاک کردن اطلاعات قبلی
     context.user_data.clear()
-
     keyboard = [
         [InlineKeyboardButton("🇮🇷 فارسی", callback_data='fa')],
         [InlineKeyboardButton("🇬🇧 English", callback_data='en')],
-        [InlineKeyboardButton("🇸🇦 العربية", callback_data='ar')],
-        [InlineKeyboardButton("🇨🇳 中文", callback_data='zh')]
     ]
     markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("لطفاً زبان خود را انتخاب کنید 🌐", reply_markup=markup)
@@ -150,23 +86,46 @@ async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [[KeyboardButton("📱 ارسال شماره", request_contact=True)]]
     markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-
     await update.message.reply_text(translations[lang]['phone'], reply_markup=markup)
     return ASK_PHONE
+
+async def ask_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = context.user_data.get('lang', 'fa')
+    contact = update.message.contact
+    context.user_data["phone"] = contact.phone_number if contact else update.message.text
+    await update.message.reply_text(translations[lang]['email'])
+    return ASK_EMAIL
+
+async def ask_job(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = context.user_data.get('lang', 'fa')
+    context.user_data["email"] = update.message.text
+    await update.message.reply_text(translations[lang]['job'])
+    return ASK_JOB
 
 async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get('lang', 'fa')
     user = update.message.from_user
-    contact = update.message.contact
-    phone = contact.phone_number if contact else update.message.text
+
+    context.user_data["job"] = update.message.text
+
+    first_name = user.first_name or ''
+    last_name = user.last_name or ''
+    username = user.username or 'ندارد'
+    user_id = user.id
     description = context.user_data.get("description", "")
+    phone = context.user_data.get("phone", "نامشخص")
+    email = context.user_data.get("email", "نامشخص")
+    job = context.user_data.get("job", "نامشخص")
 
     msg = (
-        f"👤 {user.first_name} {user.last_name or ''}\n"
-        f"🆔 {user.id}\n"
-        f"🔗 @{user.username or 'ندارد'}\n"
-        f"📝 {description}\n"
-        f"📞 {phone}"
+        f"📥 درخواست همکاری جدید:\n\n"
+        f"👤 نام: {first_name} {last_name}\n"
+        f"🆔 آیدی عددی: {user_id}\n"
+        f"🔗 یوزرنیم: @{username}\n"
+        f"📞 شماره تماس: {phone}\n"
+        f"📧 ایمیل: {email}\n"
+        f"💼 شغل: {job}\n"
+        f"📝 توضیحات: {description}"
     )
 
     await context.bot.send_message(GROUP_CHAT_ID, msg)
@@ -186,12 +145,14 @@ def run_bot():
             ASK_LANGUAGE: [CallbackQueryHandler(choose_language)],
             ASK_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_phone)],
             ASK_PHONE: [
-                MessageHandler(filters.CONTACT, collect),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, collect)
-            ]
+                MessageHandler(filters.CONTACT, ask_email),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_email)
+            ],
+            ASK_EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_job)],
+            ASK_JOB: [MessageHandler(filters.TEXT & ~filters.COMMAND, collect)]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        allow_reentry=True  # این خط اجازه ورود دوباره به گفتگو را می‌دهد
+        allow_reentry=True
     )
     app_tg.add_handler(conv_handler)
     app_tg.run_polling()
