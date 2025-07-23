@@ -121,14 +121,17 @@ Also:
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # پاک کردن اطلاعات قبلی
     context.user_data.clear()
 
     keyboard = [
-        [InlineKeyboardButton("🇮🇷 فارسی", callback_data='fa')],
-        [InlineKeyboardButton("🇬🇧 English", callback_data='en')],
-        [InlineKeyboardButton("🇸🇦 العربية", callback_data='ar')],
-        [InlineKeyboardButton("🇨🇳 中文", callback_data='zh')]
+        [
+            InlineKeyboardButton("🇮🇷 فارسی", callback_data='fa'),
+            InlineKeyboardButton("🇬🇧 English", callback_data='en')
+        ],
+        [
+            InlineKeyboardButton("🇸🇦 العربية", callback_data='ar'),
+            InlineKeyboardButton("🇨🇳 中文", callback_data='zh')
+        ]
     ]
     markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("لطفاً زبان خود را انتخاب کنید 🌐", reply_markup=markup)
@@ -191,7 +194,7 @@ def run_bot():
             ]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        allow_reentry=True  # این خط اجازه ورود دوباره به گفتگو را می‌دهد
+        allow_reentry=True
     )
     app_tg.add_handler(conv_handler)
     app_tg.run_polling()
