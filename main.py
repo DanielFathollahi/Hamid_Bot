@@ -1,142 +1,212 @@
 import os
-from telegram import Update, ReplyKeyboardMarkup
+from flask import Flask
+from telegram import (
+    Update, InlineKeyboardButton, InlineKeyboardMarkup
+)
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler,
+    Application, CommandHandler, CallbackQueryHandler, MessageHandler,
     ConversationHandler, ContextTypes, filters
 )
-from dotenv import load_dotenv
+from google.generativeai import GenerativeModel
+from datetime import datetime
 
-load_dotenv()
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("BOT_TOKEN")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GROUP_CHAT_ID = -1002542201765
 
-LANGUAGE, NAME, JOB, PHONE, EMAIL = range(5)
+app = Flask(__name__)
+
+LANGUAGE, MENU, AI_CHAT = range(3)
 
 languages = {
-    "🇮🇷 فارسی": "fa",
-    "🇺🇸 English": "en",
-    "🇸🇦 العربية": "ar",
-    "🇨🇳 中文": "zh"
+    "fa": {"flag": "🇮🇷", "name": "فارسی"},
+    "en": {"flag": "🇬🇧", "name": "English"},
+    "ar": {"flag": "🇸🇦", "name": "العربية"},
+    "zh": {"flag": "🇨🇳", "name": "中文"}
 }
 
 about_us = {
-    'fa': "📌 معرفی: حمید فتح‌اللهی\n\n"
-          "سلام و خوش‌آمدید 🌟\n"
-          "من حمید فتح‌اللهی هستم، فعال در حوزه تولید و عرضه انواع پیگمنت‌های معدنی قابل استفاده در:\n"
-          "🎨 سفال، سرامیک، فلز، شیشه و سیمان\n"
-          "همچنین:\n🌏 واردکننده محصولات از کشورهای شرقی\n🚢 صادرکننده به بازارهای عربی و غربی\n"
-          "✨ محصولات ما شامل:\n🏗️ مصالح ساختمانی\n🌱 محصولات کشاورزی\n💎 مواد اولیه صنعت طلا\n🖨️ جوهرهای چاپ دیجیتال",
-    'en': "📌 Introduction: Hamid Fathollahi\n\n"
-          "Welcome 🌟\n"
-          "I am Hamid Fathollahi, active in the production and supply of various mineral pigments for:\n"
-          "🎨 pottery, ceramics, metal, glass, and cement\n"
-          "Also:\n🌏 importer from Eastern countries\n🚢 exporter to Arab and Western markets\n"
-          "✨ Our products include:\n🏗️ building materials\n🌱 agricultural products\n💎 raw materials for the gold industry\n🖨️ digital printing inks",
-    'ar': "📌 تقديم: حميد فتح اللهي\n\n"
-          "مرحبا بكم 🌟\n"
-          "أنا حميد فتح اللهي، ناشط في إنتاج وتوريد أصباغ معدنية مختلفة تستخدم في:\n"
-          "🎨 الفخار، السيراميك، المعادن، الزجاج والأسمنت\n"
-          "كذلك:\n🌏 مستورد من البلدان الشرقية\n🚢 ومصدر إلى الأسواق العربية والغربية\n"
-          "✨ تشمل منتجاتنا:\n🏗️ مواد البناء\n🌱 المنتجات الزراعية\n💎 المواد الخام لصناعة الذهب\n🖨️ أحبار الطباعة الرقمية",
-    'zh': "📌 介绍: Hamid Fathollahi\n\n"
-          "欢迎 🌟\n"
-          "我是 Hamid Fathollahi，活跃于生产和供应各种矿物颜料，适用于：\n"
-          "🎨 陶瓷、金属、玻璃和水泥\n"
-          "同时：\n🌏 从东方国家进口\n🚢 向阿拉伯和西方市场出口\n"
-          "✨ 我们的产品包括：\n🏗️ 建筑材料\n🌱 农产品\n💎 黄金行业的原材料\n🖨️ 数码打印墨水"
+    "fa": """📌 درباره من و همکاری با ما:
+
+سلام و خوش‌آمدید 🌟
+
+من حمید فتح‌اللهی هستم، فعال در حوزه تولید و عرضه انواع پیگمنت‌های معدنی قابل استفاده در:
+🎨 سفال، سرامیک، فلز، شیشه و سیمان
+
+همچنین:
+🌏 واردکننده محصولات از کشورهای شرقی
+🚢 صادرکننده به بازارهای عربی و غربی
+
+✨ محصولات ما شامل طیف گسترده‌ای از:
+🏗️ مصالح ساختمانی
+🌱 محصولات کشاورزی
+💎 مواد اولیه صنعت طلا
+🖨️ و جوهرهای چاپ دیجیتال
+""",
+    "en": """📌 About me & Cooperation:
+
+Hello & welcome 🌟
+
+I am Hamid Fathollahi, active in the production and supply of mineral pigments for:
+🎨 Pottery, ceramics, metals, glass & cement
+
+Also:
+🌏 Importer from Eastern countries
+🚢 Exporter to Arab & Western markets
+
+✨ Our products include:
+🏗️ Building materials
+🌱 Agricultural products
+💎 Gold industry raw materials
+🖨️ Digital printing inks
+""",
+    "ar": """📌 عني والتعاون معنا:
+
+مرحبًا بكم 🌟
+
+أنا حميد فتح اللهي، ناشط في إنتاج وتوريد أصباغ معدنية تُستخدم في:
+🎨 الفخار، السيراميك، المعادن، الزجاج والأسمنت
+
+كما أنني:
+🌏 مستورد من الدول الشرقية
+🚢 ومُصدر للأسواق العربية والغربية
+
+✨ منتجاتنا تشمل:
+🏗️ مواد البناء
+🌱 المنتجات الزراعية
+💎 مواد خام لصناعة الذهب
+🖨️ وأحبار الطباعة الرقمية
+""",
+    "zh": """📌 关于我 & 合作:
+
+欢迎 🌟
+
+我是 Hamid Fathollahi，致力于生产和供应用于以下领域的矿物颜料：
+🎨 陶瓷、金属、玻璃和水泥
+
+同时：
+🌏 从东方国家进口
+🚢 向阿拉伯和西方市场出口
+
+✨ 我们的产品包括：
+🏗️ 建筑材料
+🌱 农产品
+💎 黄金行业原材料
+🖨️ 数码印刷油墨
+"""
 }
 
+user_sessions = {}
+
+@app.route('/')
+def ping():
+    return 'pong'
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    reply_keyboard = [[k] for k in languages.keys()]
-    await update.message.reply_text(
-        "🌐 لطفاً زبان خود را انتخاب کنید / Please select your language:",
-        reply_markup=ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True),
-    )
+    buttons = [
+        [InlineKeyboardButton(f"{v['flag']} {v['name']}", callback_data=f"lang_{k}")]
+        for k, v in languages.items()
+    ]
+    await update.message.reply_text("🌐 لطفاً زبان خود را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(buttons))
     return LANGUAGE
 
-
 async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang_choice = update.message.text
-    lang = languages.get(lang_choice, "fa")
+    lang = update.callback_query.data.split("_")[1]
     context.user_data["lang"] = lang
+    user_sessions[update.effective_user.id] = {"count": 0, "date": datetime.now().date()}
+    await update.callback_query.answer()
+    await show_menu(update, context)
+    return MENU
 
-    await update.message.reply_text(about_us[lang])
-    await update.message.reply_text("👤 لطفاً نام و نام خانوادگی‌تان را بفرستید:" if lang == "fa"
-                                    else "👤 Please send your full name:")
-    return NAME
-
-
-async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["name"] = update.message.text
+async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data["lang"]
-    await update.message.reply_text("💼 درباره‌ی شغل خودتان بگویید:" if lang == "fa"
-                                    else "💼 Please tell about your job:")
-    return JOB
+    text = {
+        "fa": "📋 لطفاً یکی را انتخاب کنید:",
+        "en": "📋 Please choose an option:",
+        "ar": "📋 الرجاء اختيار خيار:",
+        "zh": "📋 请选择一个选项："
+    }[lang]
+    buttons = [
+        [InlineKeyboardButton({"fa": "📄 درباره من و همکاری", "en": "📄 About me & Cooperation", "ar": "📄 عني والتعاون", "zh": "📄 关于我 & 合作"}[lang], callback_data="about")],
+        [InlineKeyboardButton({"fa": "🤖 چت با هوش مصنوعی", "en": "🤖 Chat with AI", "ar": "🤖 الدردشة مع الذكاء الاصطناعي", "zh": "🤖 与AI聊天"}[lang], callback_data="ai_chat")]
+    ]
+    await update.callback_query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    return MENU
 
-
-async def get_job(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["job"] = update.message.text
+async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data["lang"]
-    await update.message.reply_text("📞 شماره تماس خود را وارد کنید:" if lang == "fa"
-                                    else "📞 Please enter your phone number:")
-    return PHONE
+    await update.callback_query.answer()
+    await update.callback_query.message.reply_text(about_us[lang])
+    return MENU
 
+async def ai_chat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.message.reply_text("✍️ پیام خود را برای هوش مصنوعی بفرستید. برای بازگشت /menu را بزنید.")
+    return AI_CHAT
 
-async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["phone"] = update.message.text
+async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     lang = context.user_data["lang"]
-    await update.message.reply_text("✉️ ایمیل خود را وارد کنید:" if lang == "fa"
-                                    else "✉️ Please enter your email:")
-    return EMAIL
+    today = datetime.now().date()
+    session = user_sessions.get(user_id)
 
+    if session["date"] != today:
+        session["count"] = 0
+        session["date"] = today
 
-async def get_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["email"] = update.message.text
-    text = (
-        f"👤 {context.user_data['name']}\n"
-        f"💼 {context.user_data['job']}\n"
-        f"📞 {context.user_data['phone']}\n"
-        f"✉️ {context.user_data['email']}\n"
-    )
-    await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=text)
-    lang = context.user_data["lang"]
-    await update.message.reply_text("✅ اطلاعات شما با موفقیت ثبت شد. 🙏" if lang == "fa"
-                                    else "✅ Your information has been saved. 🙏")
-    return ConversationHandler.END
+    if session["count"] >= 5:
+        await update.message.reply_text({"fa": "🚫 شما امروز به ۵ پیام رسیدید.", "en": "🚫 You reached the 5 messages limit today.", "ar": "🚫 لقد وصلت إلى 5 رسائل اليوم.", "zh": "🚫 您今天已达到5条消息的限制。"}[lang])
+        return AI_CHAT
 
+    text = update.message.text.strip().lower()
+    if "حمید فتح" in text or "hamid fathollahi" in text:
+        await update.message.reply_text(about_us[lang])
+        return AI_CHAT
+
+    session["count"] += 1
+
+    model = GenerativeModel("gemini-pro", api_key=GOOGLE_API_KEY)
+    response = model.generate_content([update.message.text])
+    answer = response.text.strip().split("\n")[0]
+
+    await update.message.reply_text(answer)
+    return AI_CHAT
+
+async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    buttons = [
+        [InlineKeyboardButton(f"{v['flag']} {v['name']}", callback_data=f"lang_{k}")]
+        for k, v in languages.items()
+    ]
+    await update.message.reply_text("🌐 لطفاً زبان خود را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(buttons))
+    return LANGUAGE
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data.get("lang", "fa")
-    await update.message.reply_text("🔙 به منوی اصلی برگشتید. /start" if lang == "fa"
-                                    else "🔙 Back to main menu. /start")
+    await update.message.reply_text("❌ گفتگو لغو شد.")
     return ConversationHandler.END
 
-
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app_tg = Application.builder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            LANGUAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_language)],
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-            JOB: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_job)],
-            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
-            EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_email)],
+            LANGUAGE: [CallbackQueryHandler(set_language, pattern="^lang_")],
+            MENU: [
+                CallbackQueryHandler(about, pattern="^about$"),
+                CallbackQueryHandler(ai_chat_start, pattern="^ai_chat$")
+            ],
+            AI_CHAT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat),
+                CommandHandler("menu", menu)
+            ]
         },
-        fallbacks=[MessageHandler(filters.Regex("🔙"), cancel)],
+        fallbacks=[CommandHandler("cancel", cancel)]
     )
 
-    app.add_handler(conv_handler)
-
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.getenv("PORT", 8000)),
-        webhook_url=f"https://YOUR_RENDER_URL/{BOT_TOKEN}"
-    )
-
+    app_tg.add_handler(conv_handler)
+    app_tg.run_polling()
 
 if __name__ == "__main__":
+    import threading
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000)).start()
     main()
