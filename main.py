@@ -1,18 +1,29 @@
 import os
+import threading
+from datetime import datetime
+from dotenv import load_dotenv
 from flask import Flask
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+)
 from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler, MessageHandler,
+    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
     ConversationHandler, ContextTypes, filters
 )
 from huggingface_hub import InferenceClient
-from datetime import datetime
+from google.generativeai import GenerativeModel
 
+# بارگذاری محیط
+load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 HF_TOKEN = os.getenv("HF_TOKEN")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+# کلاینت‌ها
+mistral_client = InferenceClient("mistralai/Mistral-7B-Instruct-v0.2", token=HF_TOKEN)
+gemini_model = GenerativeModel("gemini-pro", api_key=GOOGLE_API_KEY)
 
 app = Flask(__name__)
-client = InferenceClient("mistralai/Mistral-7B-Instruct-v0.2", token=HF_TOKEN)
 
 LANGUAGE, MENU, ABOUT_JOB, ABOUT_PHONE, AI_CHAT = range(5)
 
@@ -24,70 +35,10 @@ languages = {
 }
 
 about_us = {
-    "fa": """📌 درباره من و همکاری با ما:
-
-سلام و خوش‌آمدید 🌟
-
-من حمید فتح‌اللهی هستم، فعال در حوزه تولید و عرضه انواع پیگمنت‌های معدنی قابل استفاده در:
-🎨 سفال، سرامیک، فلز، شیشه و سیمان
-
-🌏 واردکننده محصولات از کشورهای شرقی
-🚢 صادرکننده به بازارهای عربی و غربی
-
-✨ محصولات ما شامل:
-🏗️ مصالح ساختمانی
-🌱 محصولات کشاورزی
-💎 مواد اولیه صنعت طلا
-🖨️ جوهرهای چاپ دیجیتال
-""",
-    "en": """📌 About me & Cooperation:
-
-Hello & welcome 🌟
-
-I am Hamid Fathollahi, active in the production and supply of mineral pigments for:
-🎨 Pottery, ceramics, metals, glass & cement
-
-🌏 Importer from Eastern countries
-🚢 Exporter to Arab & Western markets
-
-✨ Our products include:
-🏗️ Building materials
-🌱 Agricultural products
-💎 Gold industry raw materials
-🖨️ Digital printing inks
-""",
-    "ar": """📌 عني والتعاون معنا:
-
-مرحبًا بكم 🌟
-
-أنا حميد فتح اللهي، ناشط في إنتاج وتوريد أصباغ معدنية تُستخدم في:
-🎨 الفخار، السيراميك، المعادن، الزجاج والأسمنت
-
-🌏 مستورد من الدول الشرقية
-🚢 ومُصدر للأسواق العربية والغربية
-
-✨ منتجاتنا تشمل:
-🏗️ مواد البناء
-🌱 المنتجات الزراعية
-💎 مواد خام لصناعة الذهب
-🖨️ وأحبار الطباعة الرقمية
-""",
-    "zh": """📌 关于我 & 合作:
-
-欢迎 🌟
-
-我是 Hamid Fathollahi，致力于生产和供应用于以下领域的矿物颜料：
-🎨 陶瓷、金属、玻璃和水泥
-
-🌏 从东方国家进口
-🚢 向阿拉伯和西方市场出口
-
-✨ 我们的产品包括：
-🏗️ 建筑材料
-🌱 农产品
-💎 黄金行业原材料
-🖨️ 数码印刷油墨
-"""
+    "fa": "📌 درباره من و همکاری ...",  # همان متن کامل را جایگزین کن
+    "en": "📌 About me & Cooperation ...",
+    "ar": "📌 عني والتعاون معنا ...",
+    "zh": "📌 关于我 & 合作 ..."
 }
 
 ask_job = {
@@ -124,6 +75,7 @@ user_sessions = {}
 def ping():
     return 'pong'
 
+# --- مکالمه ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = [
         [InlineKeyboardButton(f"{v['flag']} {v['name']}", callback_data=f"lang_{k}")]
@@ -141,7 +93,7 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return MENU
 
 async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data.get("lang", "en")
+    lang = context.user_data["lang"]
     text = {
         "fa": "📋 لطفاً یکی را انتخاب کنید:",
         "en": "📋 Please choose an option:",
@@ -156,35 +108,35 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return MENU
 
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data.get("lang", "en")
+    lang = context.user_data["lang"]
     await update.callback_query.answer()
     await update.callback_query.message.reply_text(about_us[lang])
     await update.callback_query.message.reply_text(ask_job[lang])
     return ABOUT_JOB
 
 async def about_job(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data.get("lang", "en")
+    lang = context.user_data["lang"]
     context.user_data["job_desc"] = update.message.text
     await update.message.reply_text(ask_phone[lang])
     return ABOUT_PHONE
 
 async def about_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data.get("lang", "en")
+    lang = context.user_data["lang"]
     context.user_data["phone"] = update.message.text
     await update.message.reply_text(thank_you[lang])
     return MENU
 
 async def ai_chat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data.get("lang", "en")
+    lang = context.user_data["lang"]
     await update.callback_query.answer()
     await update.callback_query.message.reply_text(f"✍️ {back_menu[lang]}")
     return AI_CHAT
 
 async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    lang = context.user_data.get("lang", "en")
+    lang = context.user_data["lang"]
     today = datetime.now().date()
-    session = user_sessions.setdefault(user_id, {"count": 0, "date": today})
+    session = user_sessions.get(user_id)
 
     if session["date"] != today:
         session["count"] = 0
@@ -199,20 +151,21 @@ async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }[lang])
         return AI_CHAT
 
-    text = update.message.text.strip().lower()
-    if "حمید فتح" in text or "hamid fathollahi" in text:
+    text = update.message.text.strip()
+    session["count"] += 1
+
+    # اگر نام مشخصی پرسیده شد
+    if "حمید فتح" in text or "hamid fathollahi" in text.lower():
         await update.message.reply_text(about_us[lang])
         return AI_CHAT
 
-    session["count"] += 1
-
+    # پاسخ از مدل Gemini یا Mistral
     try:
-        response = client.text_generation(update.message.text, max_new_tokens=300)
-        answer = response.strip().split("\n")[0] if response else "❗ مشکلی پیش آمد."
-    except Exception as e:
-        answer = f"❌ خطا: {str(e)}"
+        response = gemini_model.generate_content([text]).text.strip()
+    except Exception:
+        response = mistral_client.text_generation(text, max_new_tokens=300).strip()
 
-    await update.message.reply_text(f"🤖 {answer}")
+    await update.message.reply_text(f"🤖 {response}")
     return AI_CHAT
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -227,6 +180,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ گفتگو لغو شد.")
     return ConversationHandler.END
 
+# --- راه‌اندازی ---
 def main():
     app_tg = Application.builder().token(TOKEN).build()
 
@@ -252,6 +206,5 @@ def main():
     app_tg.run_polling()
 
 if __name__ == "__main__":
-    import threading
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000)).start()
     main()
