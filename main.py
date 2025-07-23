@@ -12,6 +12,7 @@ from datetime import datetime
 
 TOKEN = os.getenv("BOT_TOKEN")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GROUP_CHAT_ID = -1002542201765  # گروه مقصد
 
 app = Flask(__name__)
 
@@ -172,6 +173,14 @@ async def about_job(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def about_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data["lang"]
     context.user_data["phone"] = update.message.text
+
+    msg_to_group = f"""📩 درباره‌ی خود و شغل خود توضیح دهید:
+👤 نام: {update.effective_user.full_name}
+💼 شغل: {context.user_data['job_desc']}
+📱 شماره: {context.user_data['phone']}"""
+
+    await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=msg_to_group)
+
     await update.message.reply_text(thank_you[lang])
     return MENU
 
