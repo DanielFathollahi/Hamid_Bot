@@ -3,28 +3,25 @@ import threading
 from datetime import datetime
 from dotenv import load_dotenv
 from flask import Flask
-from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ConversationHandler, ContextTypes, filters
+    Application, CommandHandler, CallbackQueryHandler,
+    MessageHandler, ConversationHandler, ContextTypes, filters
 )
 from huggingface_hub import InferenceClient
-from google.generativeai import GenerativeModel
 
-# بارگذاری محیط
+# بارگذاری متغیرهای محیطی
 load_dotenv()
-TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 HF_TOKEN = os.getenv("HF_TOKEN")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-# کلاینت‌ها
-mistral_client = InferenceClient("mistralai/Mistral-7B-Instruct-v0.2", token=HF_TOKEN)
-gemini_model = GenerativeModel("gemini-pro", api_key=GOOGLE_API_KEY)
-
+# Flask برای health check
 app = Flask(__name__)
 
+# کلاینت Mistral
+client = InferenceClient("mistralai/Mistral-7B-Instruct-v0.2", token=HF_TOKEN)
+
+# مراحل گفتگو
 LANGUAGE, MENU, ABOUT_JOB, ABOUT_PHONE, AI_CHAT = range(5)
 
 languages = {
@@ -34,8 +31,9 @@ languages = {
     "zh": {"flag": "🇨🇳", "name": "中文"}
 }
 
+# پیام‌های چندزبانه
 about_us = {
-    "fa": "📌 درباره من و همکاری ...",  # همان متن کامل را جایگزین کن
+    "fa": "📌 درباره من و همکاری ...",  # جایگزین کن با متن کامل
     "en": "📌 About me & Cooperation ...",
     "ar": "📌 عني والتعاون معنا ...",
     "zh": "📌 关于我 & 合作 ..."
@@ -73,9 +71,9 @@ user_sessions = {}
 
 @app.route('/')
 def ping():
-    return 'pong'
+    return "pong"
 
-# --- مکالمه ---
+# شروع
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = [
         [InlineKeyboardButton(f"{v['flag']} {v['name']}", callback_data=f"lang_{k}")]
@@ -84,6 +82,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🌐 لطفاً زبان خود را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(buttons))
     return LANGUAGE
 
+# انتخاب زبان
 async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = update.callback_query.data.split("_")[1]
     context.user_data["lang"] = lang
@@ -92,6 +91,7 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await show_menu(update, context)
     return MENU
 
+# منو
 async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data["lang"]
     text = {
@@ -107,6 +107,7 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
     return MENU
 
+# بخش درباره من
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data["lang"]
     await update.callback_query.answer()
@@ -126,12 +127,14 @@ async def about_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(thank_you[lang])
     return MENU
 
+# شروع چت AI
 async def ai_chat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data["lang"]
     await update.callback_query.answer()
     await update.callback_query.message.reply_text(f"✍️ {back_menu[lang]}")
     return AI_CHAT
 
+# چت با Mistral
 async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang = context.user_data["lang"]
@@ -154,20 +157,17 @@ async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     session["count"] += 1
 
-    # اگر نام مشخصی پرسیده شد
+    # اگر کاربر درباره حمید فتح‌اللهی پرسید
     if "حمید فتح" in text or "hamid fathollahi" in text.lower():
         await update.message.reply_text(about_us[lang])
         return AI_CHAT
 
-    # پاسخ از مدل Gemini یا Mistral
-    try:
-        response = gemini_model.generate_content([text]).text.strip()
-    except Exception:
-        response = mistral_client.text_generation(text, max_new_tokens=300).strip()
-
+    # پاسخ مدل mistral
+    response = client.text_generation(text, max_new_tokens=300).strip()
     await update.message.reply_text(f"🤖 {response}")
     return AI_CHAT
 
+# منوی زبان دوباره
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = [
         [InlineKeyboardButton(f"{v['flag']} {v['name']}", callback_data=f"lang_{k}")]
@@ -180,9 +180,9 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ گفتگو لغو شد.")
     return ConversationHandler.END
 
-# --- راه‌اندازی ---
+# راه‌اندازی
 def main():
-    app_tg = Application.builder().token(TOKEN).build()
+    app_tg = Application.builder().token(BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
