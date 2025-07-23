@@ -10,14 +10,18 @@ from telegram.ext import (
 from google.generativeai import GenerativeModel
 from datetime import datetime
 
+# متغیرهای محیطی از Render
 TOKEN = os.getenv("BOT_TOKEN")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-GROUP_CHAT_ID = -1002542201765
+GROUP_CHAT_ID = -1002542201765  # گروه مقصد
 
+# اپلیکیشن Flask برای UptimeRobot
 app = Flask(__name__)
 
-LANGUAGE, MENU, AI_CHAT = range(3)
+# مراحل گفتگو
+LANGUAGE, MENU, AI_CHAT, COLLECT_INFO = range(4)
 
+# زبان‌ها
 languages = {
     "fa": {"flag": "🇮🇷", "name": "فارسی"},
     "en": {"flag": "🇬🇧", "name": "English"},
@@ -25,6 +29,7 @@ languages = {
     "zh": {"flag": "🇨🇳", "name": "中文"}
 }
 
+# متن درباره ما
 about_us = {
     "fa": """📌 درباره من و همکاری با ما:
 
@@ -102,24 +107,19 @@ user_sessions = {}
 def ping():
     return 'pong'
 
+# وقتی استارت زده میشه: خوش‌آمد + منو
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    buttons = [
-        [InlineKeyboardButton(f"{v['flag']} {v['name']}", callback_data=f"lang_{k}")]
-        for k, v in languages.items()
-    ]
-    await update.message.reply_text("🌐 لطفاً زبان خود را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(buttons))
-    return LANGUAGE
-
-async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = update.callback_query.data.split("_")[1]
+    lang = "fa"  # پیش‌فرض فارسی
     context.user_data["lang"] = lang
     user_sessions[update.effective_user.id] = {"count": 0, "date": datetime.now().date()}
-    await update.callback_query.answer()
-    await show_menu(update, context)
-    return MENU
 
+    await update.message.reply_text(about_us[lang])
+
+    return await show_menu(update, context)
+
+# نمایش منو
 async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data["lang"]
+    lang = context.user_data.get("lang", "fa")
     text = {
         "fa": "📋 لطفاً یکی را انتخاب کنید:",
         "en": "📋 Please choose an option:",
@@ -130,67 +130,105 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton({"fa": "📄 درباره من و همکاری", "en": "📄 About me & Cooperation", "ar": "📄 عني والتعاون", "zh": "📄 关于我 & 合作"}[lang], callback_data="about")],
         [InlineKeyboardButton({"fa": "🤖 چت با هوش مصنوعی", "en": "🤖 Chat with AI", "ar": "🤖 الدردشة مع الذكاء الاصطناعي", "zh": "🤖 与AI聊天"}[lang], callback_data="ai_chat")]
     ]
-    await update.callback_query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
     return MENU
 
+# دکمه درباره ما کلیک شد
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data["lang"]
+    lang = context.user_data.get("lang", "fa")
     await update.callback_query.answer()
     await update.callback_query.message.reply_text(about_us[lang])
+
+    # درخواست اطلاعات کاربر
+    prompt = {
+        "fa": "✍️ لطفاً نام و نام خانوادگی، شغل و شماره تماس خود را برای همکاری ارسال کنید:",
+        "en": "✍️ Please send your full name, profession, and phone number for cooperation:",
+        "ar": "✍️ يرجى إرسال اسمك الكامل، مهنتك ورقم هاتفك للتعاون:",
+        "zh": "✍️ 请发送您的姓名、职业和联系电话以便合作："
+    }[lang]
+
+    await update.callback_query.message.reply_text(prompt)
+    return COLLECT_INFO
+
+# کاربر اطلاعات همکاری را می‌فرسته
+async def collect_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    info = update.message.text
+    user = update.effective_user
+
+    msg = f"👤 اطلاعات همکاری جدید:\n\n" \
+          f"نام کاربر: {user.full_name}\n" \
+          f"یوزرنیم: @{user.username or '---'}\n" \
+          f"متن ارسالی:\n{info}"
+
+    # ارسال به گروه
+    await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=msg)
+
+    await update.message.reply_text("✅ اطلاعات شما با موفقیت ثبت و ارسال شد. ممنون از شما!")
     return MENU
 
+# شروع چت با هوش مصنوعی
 async def ai_chat_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     await update.callback_query.message.reply_text("✍️ پیام خود را برای هوش مصنوعی بفرستید. برای بازگشت /menu را بزنید.")
     return AI_CHAT
 
+# پاسخ AI به پیام کاربر
 async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    lang = context.user_data["lang"]
+    lang = context.user_data.get("lang", "fa")
     today = datetime.now().date()
     session = user_sessions.get(user_id)
+
+    if not session:
+        session = {"count": 0, "date": today}
+        user_sessions[user_id] = session
 
     if session["date"] != today:
         session["count"] = 0
         session["date"] = today
 
     if session["count"] >= 5:
-        await update.message.reply_text({"fa": "🚫 شما امروز به ۵ پیام رسیدید.", "en": "🚫 You reached the 5 messages limit today.", "ar": "🚫 لقد وصلت إلى 5 رسائل اليوم.", "zh": "🚫 您今天已达到5条消息的限制。"}[lang])
+        await update.message.reply_text({
+            "fa": "🚫 شما امروز به ۵ پیام رسیدید.",
+            "en": "🚫 You reached the 5 messages limit today.",
+            "ar": "🚫 لقد وصلت إلى 5 رسائل اليوم.",
+            "zh": "🚫 您今天已达到5条消息的限制。"
+        }[lang])
         return AI_CHAT
 
-    text = update.message.text.strip().lower()
-    if "حمید فتح" in text or "hamid fathollahi" in text:
-        await update.message.reply_text(about_us[lang])
-        return AI_CHAT
+    try:
+        model = GenerativeModel("gemini-pro", api_key=GOOGLE_API_KEY)
+        response = model.generate_content([update.message.text])
+        answer = response.text.strip().split("\n")[0]
+        session["count"] += 1
+        await update.message.reply_text(answer)
+    except Exception as e:
+        print("AI Error:", e)
+        await update.message.reply_text({
+            "fa": "❌ خطا در پاسخ AI",
+            "en": "❌ AI error",
+            "ar": "❌ خطأ في الذكاء الاصطناعي",
+            "zh": "❌ AI 出错"
+        }[lang])
 
-    session["count"] += 1
-
-    model = GenerativeModel("gemini-pro", api_key=GOOGLE_API_KEY)
-    response = model.generate_content([update.message.text])
-    answer = response.text.strip().split("\n")[0]
-
-    await update.message.reply_text(answer)
     return AI_CHAT
 
+# بازگشت به منو
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    buttons = [
-        [InlineKeyboardButton(f"{v['flag']} {v['name']}", callback_data=f"lang_{k}")]
-        for k, v in languages.items()
-    ]
-    await update.message.reply_text("🌐 لطفاً زبان خود را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(buttons))
-    return LANGUAGE
+    return await show_menu(update, context)
 
+# لغو گفتگو
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ گفتگو لغو شد.")
     return ConversationHandler.END
 
+# راه‌اندازی برنامه
 def main():
     app_tg = Application.builder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            LANGUAGE: [CallbackQueryHandler(set_language, pattern="^lang_")],
             MENU: [
                 CallbackQueryHandler(about, pattern="^about$"),
                 CallbackQueryHandler(ai_chat_start, pattern="^ai_chat$")
@@ -198,6 +236,9 @@ def main():
             AI_CHAT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat),
                 CommandHandler("menu", menu)
+            ],
+            COLLECT_INFO: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, collect_info)
             ]
         },
         fallbacks=[CommandHandler("cancel", cancel)]
@@ -208,5 +249,5 @@ def main():
 
 if __name__ == "__main__":
     import threading
-    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000)).start()
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))).start()
     main()
