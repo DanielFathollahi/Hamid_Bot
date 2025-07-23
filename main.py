@@ -121,6 +121,9 @@ Also:
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # پاک کردن اطلاعات قبلی
+    context.user_data.clear()
+
     keyboard = [
         [InlineKeyboardButton("🇮🇷 فارسی", callback_data='fa')],
         [InlineKeyboardButton("🇬🇧 English", callback_data='en')],
@@ -187,7 +190,8 @@ def run_bot():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, collect)
             ]
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[CommandHandler("cancel", cancel)],
+        allow_reentry=True  # این خط اجازه ورود دوباره به گفتگو را می‌دهد
     )
     app_tg.add_handler(conv_handler)
     app_tg.run_polling()
