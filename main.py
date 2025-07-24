@@ -21,7 +21,6 @@ def ping():
 
 ASK_LANGUAGE, ASK_NAME, ASK_JOB, ASK_PHONE, ASK_EMAIL = range(5)
 
-# مسیر فایل‌های صوتی
 voice_files = {
     'fa': 'معرفی من به زبان فارسی.ogg',
     'en': 'My information is in English.ogg',
@@ -161,6 +160,7 @@ async def choose_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     lang = query.data
     context.user_data['lang'] = lang
+    context.user_data.clear()  # پاک کردن اطلاعات قبلی برای شروع جدید
 
     # ارسال فایل صوتی معرفی با توجه به زبان
     voice_path = voice_files.get(lang)
@@ -168,7 +168,7 @@ async def choose_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with open(voice_path, 'rb') as voice:
             await query.message.reply_voice(voice)
 
-    # ارسال پیام معرفی متنی و سوال اول
+    # ارسال پیام معرفی متنی و سوال نام
     await query.message.reply_text(translations[lang]['intro'])
     await query.message.reply_text(translations[lang]['ask_name'])
     return ASK_NAME
@@ -215,8 +215,12 @@ async def collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await context.bot.send_message(GROUP_CHAT_ID, msg)
-    await update.message.reply_text(translations[lang]['thanks'], reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True))
-    return ConversationHandler.END
+    await update.message.reply_text(translations[lang]['thanks'], reply_markup=ReplyKeyboardMarkup([
+        ['🇮🇷 فارسی', '🇬🇧 English'],
+        ['🇸🇦 العربية', '🇨🇳 中文']
+    ], resize_keyboard=True))
+    # بعد از جمع‌آوری اطلاعات، اجازه میدیم کاربر مجدد زبان رو انتخاب کنه
+    return ASK_LANGUAGE
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get('lang', 'fa')
