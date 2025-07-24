@@ -21,6 +21,14 @@ def ping():
 
 ASK_LANGUAGE, ASK_NAME, ASK_JOB, ASK_PHONE, ASK_EMAIL = range(5)
 
+# مسیر فایل‌های صوتی
+voice_files = {
+    'fa': 'معرفی من به زبان فارسی.ogg',
+    'en': 'My information is in English.ogg',
+    'ar': 'معلوماتي باللغة العربي.ogg',
+    'zh': '我的信息是中文的.ogg'
+}
+
 translations = {
     'fa': {
         'intro': """
@@ -149,6 +157,14 @@ async def choose_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     lang = query.data
     context.user_data['lang'] = lang
+
+    # ارسال فایل صوتی معرفی با توجه به زبان
+    voice_path = voice_files.get(lang)
+    if voice_path and os.path.exists(voice_path):
+        with open(voice_path, 'rb') as voice:
+            await query.message.reply_voice(voice)
+
+    # ارسال پیام معرفی متنی و سوال اول
     await query.message.reply_text(translations[lang]['intro'])
     await query.message.reply_text(translations[lang]['ask_name'])
     return ASK_NAME
