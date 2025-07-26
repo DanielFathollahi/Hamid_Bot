@@ -13,6 +13,19 @@ from telegram.ext import (
 TOKEN = os.getenv("TOKEN")
 GROUP_CHAT_ID = -1002542201765
 
+
+await context.bot.send_message(
+    chat_id=-1002542201765,  # آیدی عددی گروهت را اینجا بگذار
+    text=(
+        f"🔔 کاربر جدید ربات را استارت کرد:\n"
+        f"👤 نام: {update.effective_user.first_name or ''} {update.effective_user.last_name or ''}\n"
+        f"📛 نام‌کاربری: @{update.effective_user.username if update.effective_user.username else 'ندارد'}\n"
+        f"🆔 آیدی عددی: {update.effective_user.id}"
+    )
+)
+
+
+
 app = Flask(__name__)
 
 @app.route('/')
@@ -246,3 +259,9 @@ def run_bot():
 if __name__ == "__main__":
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000)).start()
     run_bot()
+
+
+
+
+
+
