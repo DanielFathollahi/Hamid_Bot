@@ -13,33 +13,6 @@ from telegram.ext import (
 TOKEN = os.getenv("TOKEN")
 GROUP_CHAT_ID = -1002542201765
 
-
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-
-GROUP_CHAT_ID = -1001234567890  # آیدی عددی گروه
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    await context.bot.send_message(
-        chat_id=GROUP_CHAT_ID,
-        text=(
-            f"🔔 کاربر جدید ربات را استارت کرد:\n"
-            f"👤 نام: {user.first_name or ''} {user.last_name or ''}\n"
-            f"📛 نام‌کاربری: @{user.username if user.username else 'ندارد'}\n"
-            f"🆔 آیدی عددی: {user.id}"
-        )
-    )
-    await update.message.reply_text("سلام! خوش آمدی 😊")
-
-if __name__ == '__main__':
-    app = ApplicationBuilder().token("YOUR_BOT_TOKEN").build()
-    app.add_handler(CommandHandler("start", start))
-    app.run_polling()
-
-
-
-
 app = Flask(__name__)
 
 @app.route('/')
@@ -273,9 +246,3 @@ def run_bot():
 if __name__ == "__main__":
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000)).start()
     run_bot()
-
-
-
-
-
-
