@@ -141,6 +141,18 @@ and cooperating with you is our honor. 🤝✨
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    # ارسال اطلاعات کاربر به گروه
+    await context.bot.send_message(
+        chat_id=GROUP_CHAT_ID,
+        text=(
+            f"🔔 کاربر جدید ربات را استارت کرد:\n"
+            f"👤 نام: {user.first_name or ''} {user.last_name or ''}\n"
+            f"📛 نام‌کاربری: @{user.username if user.username else 'ندارد'}\n"
+            f"🆔 آیدی عددی: {user.id}"
+        )
+    )
+
     context.user_data.clear()
     keyboard = [
         [
